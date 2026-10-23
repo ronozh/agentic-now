@@ -1,5 +1,11 @@
 # Eval results
 
+Notes:
+- Agent vs pipeline (iter 04): the agent fixes out-of-scope refusals (0 → 1.00 with the search
+  nudge) and handles comparisons, but costs 2–4 LLM calls per question; the fixed pipeline is
+  better value for single-fact questions. qwen3:4b-instruct is 6× faster than qwen3:8b with a
+  similar judge score.
+
 | date | label | target | model | k | hit@k | mrr | citation_correct | keywords | answered | refusal_correct | judge | failures | avg s |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-10-23 23:59 | retrieval-k5 | retrieval | qwen3:8b | 5 | 1.00 | 0.66 | – | – | – | – | – | – | 0.0 |

@@ -42,6 +42,18 @@ uv run python -m agentic_now.agents.books "Compare Herzberg's two-factor theory 
 Instead of one fixed retrieval, the agent decides what to do with its tools (`search`, `read_page`,
 `list_books`): it can search several times and read whole pages, and must cite what it used. It refuses questions the books don't cover.
 
+## HR database + MCP (text-to-SQL)
+
+```bash
+uv run python -m agentic_now.hr.seed        # schema + 500 synthetic employees (deterministic)
+uv run python -m agentic_now.agents.hr "How many employees are in each department?"
+uv run fastmcp dev inspector src/agentic_now/mcp_servers/hr_server.py   # try the MCP tools
+```
+
+The HR agent gets its tools (`list_tables`, `describe_table`, `run_readonly_sql`) from a FastMCP
+server that connects as a read-only role with a statement timeout. Simple questions work;
+"headcount" questions don't, because the data has traps (part-time, contractors, leave, future exits).
+
 ## Observability (Langfuse)
 
 ```bash
@@ -62,6 +74,7 @@ uv run python -m evals.rag_eval --target retrieval     # hit@k, MRR only: ~2s, d
 uv run python -m evals.rag_eval                        # + answer checks + LLM judge: ~6 min
 uv run python -m evals.rag_eval --k 10 --label k10     # experiment; compare rows in evals/RESULTS.md
 uv run python -m evals.rag_eval --target agent --limit 3   # agentic RAG, smoke test on 3 cases
+uv run python -m evals.hr_eval                         # HR agent vs ground-truth SQL (evals/RESULTS_HR.md)
 ```
 
 Golden set: `evals/datasets/rag_golden.yaml` (pages verified by hand). Scores are also attached to each case's Langfuse trace.
@@ -83,7 +96,7 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 - [x] 02 Observability — Langfuse tracing
 - [x] 03 Evaluation — golden set + baseline
 - [x] 04 Agentic RAG — agent-driven search
-- [ ] 05 HR database + MCP — text-to-SQL
+- [x] 05 HR database + MCP — text-to-SQL
 - [ ] 06 Semantic layer — governed metrics (headcount, FTE)
 - [ ] 07 Multi-agent + A2A
 - [ ] 08 API + UI

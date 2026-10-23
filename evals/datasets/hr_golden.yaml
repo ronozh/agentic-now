@@ -1,0 +1,81 @@
+# HR golden set. ground_truth_sql is hand-written and computed at eval time (dates move).
+# Business definitions used by the ground truth (made explicit in iteration 06):
+#   employee    = employment_type full_time or part_time (contractors and interns excluded)
+#   headcount   = employees whose status on the date is active, paid_leave or unpaid_leave
+#   FTE         = sum of fte_ratio for status active or paid_leave (unpaid leave counts 0)
+#   projected   = headcount on the date (planned exits applied) + approved reqs starting by then
+# kind: easy (plain SQL works) | trap (needs the business definition)
+cases:
+  - name: department_count
+    kind: easy
+    question: How many departments does the company have?
+    ground_truth_sql: SELECT count(*) FROM hr.departments
+
+  - name: hires_2025
+    kind: easy
+    question: How many people were hired in 2025?
+    ground_truth_sql: |
+      SELECT count(*) FROM hr.employees
+      WHERE hire_date >= '2025-01-01' AND hire_date < '2026-01-01'
+
+  - name: approved_requisitions
+    kind: easy
+    question: How many approved requisitions are there?
+    ground_truth_sql: SELECT count(*) FROM hr.requisitions WHERE status = 'approved'
+
+  - name: headcount_today
+    kind: trap
+    question: What is our headcount today?
+    ground_truth_sql: |
+      SELECT count(DISTINCT e.id)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type IN ('full_time', 'part_time')
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status IN ('active', 'paid_leave', 'unpaid_leave')
+
+  - name: fte_today
+    kind: trap
+    question: What is our total FTE today?
+    tolerance: 0.5
+    ground_truth_sql: |
+      SELECT sum(e.fte_ratio)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type IN ('full_time', 'part_time')
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status IN ('active', 'paid_leave')
+
+  - name: unpaid_leave_today
+    kind: trap
+    question: How many employees are on unpaid leave right now?
+    ground_truth_sql: |
+      SELECT count(DISTINCT e.id)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type IN ('full_time', 'part_time')
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status = 'unpaid_leave'
+
+  - name: part_time_headcount
+    kind: trap
+    question: How many part-time employees do we have?
+    ground_truth_sql: |
+      SELECT count(DISTINCT e.id)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type = 'part_time'
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status IN ('active', 'paid_leave', 'unpaid_leave')
+
+  - name: headcount_year_end
+    kind: trap
+    question: What will our headcount be at the end of this year?
+    ground_truth_sql: |
+      WITH year_end AS (SELECT make_date(extract(year FROM current_date)::int, 12, 31) AS d)
+      SELECT
+        (SELECT count(DISTINCT e.id)
+         FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id, year_end
+         WHERE e.employment_type IN ('full_time', 'part_time')
+           AND h.valid_from <= year_end.d AND (h.valid_to IS NULL OR h.valid_to > year_end.d)
+           AND h.status IN ('active', 'paid_leave', 'unpaid_leave'))
+        +
+        (SELECT count(*) FROM hr.requisitions r, year_end
+         WHERE r.status = 'approved' AND r.target_start_date > current_date
+           AND r.target_start_date <= year_end.d)
