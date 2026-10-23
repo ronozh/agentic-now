@@ -9,3 +9,5 @@ because stdio MCP spawns a server subprocess per HR call, while HTTP reuses one 
 | 2026-10-24 07:31 | a2a-http-4b | a2a | http | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 30.8 |
 | 2026-10-24 07:36 | local-4b | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 40.0 |
 | 2026-10-24 07:43 | local-4b-v2 | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 39.0 |
+| 2026-10-24 08:02 | regression-iter08 | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 38.4 |
+| 2026-10-24 08:07 | review-fixes | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 36.9 |

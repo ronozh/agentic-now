@@ -14,3 +14,4 @@ policy as tested, point-in-time SQL. Raw SQL stays as a fallback for questions n
 | 2026-10-24 07:07 | sql-4b | qwen3:4b-instruct | 0.38 | 1.00 | 0.00 | 0 | 19.5 |
 | 2026-10-24 07:13 | semantic-4b | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 10.3 |
 | 2026-10-24 07:15 | sql-4b-v2 | qwen3:4b-instruct | 0.38 | 1.00 | 0.00 | 0 | 13.3 |
+| 2026-10-24 07:57 | regression-iter08 | qwen3:4b-instruct | 0.88 | 0.67 | 1.00 | 0 | 12.4 |

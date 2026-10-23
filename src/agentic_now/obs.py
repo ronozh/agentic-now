@@ -12,13 +12,15 @@ from functools import cache
 from langfuse import Langfuse, get_client
 from pydantic_ai import Agent
 
+from agentic_now.config import settings
+
 logger = logging.getLogger(__name__)
 
 
 def _langfuse_reachable() -> bool:
-    base_url = os.getenv("LANGFUSE_BASE_URL", "http://localhost:3000")
     try:
-        with urllib.request.urlopen(f"{base_url}/api/public/health", timeout=2):
+        url = f"{settings.langfuse_base_url}/api/public/health"
+        with urllib.request.urlopen(url, timeout=2):
             return True
     except OSError:
         return False
@@ -26,7 +28,7 @@ def _langfuse_reachable() -> bool:
 
 @cache
 def init_observability() -> Langfuse | None:
-    if not (os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY")):
+    if not (settings.langfuse_public_key and settings.langfuse_secret_key):
         reason = "Langfuse keys not set"
     elif not _langfuse_reachable():
         reason = "Langfuse not reachable"
@@ -39,7 +41,7 @@ def init_observability() -> Langfuse | None:
         return None
     Agent.instrument_all()  # every agent run, model request and tool call becomes a span
     client = get_client()
-    logger.debug("Langfuse tracing to %s", os.getenv("LANGFUSE_BASE_URL"))
+    logger.debug("Langfuse tracing to %s", settings.langfuse_base_url)
     return client
 
 

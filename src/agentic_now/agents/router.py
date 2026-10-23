@@ -5,6 +5,7 @@ Run: uv run python -m agentic_now.agents.router "question"
      BOOKS_AGENT_MODE=a2a HR_MCP_TRANSPORT=http uv run python -m agentic_now.agents.router "..."
 """
 
+import asyncio
 import logging
 import sys
 import time
@@ -113,7 +114,7 @@ async def ask_hr(ctx: RunContext[RouterDeps], question: str) -> str:
 
 
 @observe(name="router")
-def ask(
+async def ask_async(
     question: str, message_history: list | None = None
 ) -> tuple[RouterAnswer, list]:
     """Answer one turn. Returns the answer and this turn's messages (for conversation history)."""
@@ -126,7 +127,7 @@ def ask(
     )
     started = time.perf_counter()
     deps = RouterDeps()
-    result = agent.run_sync(
+    result = await agent.run(
         question,
         deps=deps,
         message_history=message_history,
@@ -146,6 +147,12 @@ def ask(
         errors=deps.errors,
     )
     return answer, result.new_messages()
+
+
+def ask(
+    question: str, message_history: list | None = None
+) -> tuple[RouterAnswer, list]:
+    return asyncio.run(ask_async(question, message_history))
 
 
 def main() -> None:

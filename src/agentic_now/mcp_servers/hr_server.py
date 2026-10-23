@@ -34,12 +34,13 @@ mcp = FastMCP(
 
 
 def _query(
-    query: str | sql.Composed, params: tuple | dict = ()
+    query: str | sql.Composed, params: tuple | dict | None = None
 ) -> list[dict[str, Any]]:
     # The role itself is read-only with a 5s statement timeout (sql/hr_roles.sql); the checks
     # in run_readonly_sql are a friendlier first line of defense, not the security boundary.
     with psycopg.connect(settings.hr_database_url, row_factory=dict_row) as conn:
-        return conn.execute(query, params).fetchall()
+        # params=None: without parameters psycopg leaves `%` alone (e.g. LIKE 'Eng%').
+        return conn.execute(query, params or None).fetchall()
 
 
 @mcp.tool
@@ -110,7 +111,8 @@ def run_readonly_sql(sql: str) -> dict[str, Any]:
         return {"error": "Only a single SELECT or WITH statement is allowed."}
     try:
         # Limit inside the database: never pull a huge result into memory.
-        rows = _query(f"SELECT * FROM ({statement}) q LIMIT {MAX_ROWS + 1}")
+        # Newline before ")": a trailing `-- comment` must not swallow the wrapper.
+        rows = _query(f"SELECT * FROM ({statement}\n) q LIMIT {MAX_ROWS + 1}")
     except psycopg.Error as e:
         logger.info("SQL error: %s", e)
         return {"error": str(e).strip()}

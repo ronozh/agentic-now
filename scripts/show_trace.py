@@ -22,9 +22,12 @@ def main() -> None:
     observations = api.observations.get_many(
         trace_id=trace_id, limit=100, fields="core,basic,usage,model"
     ).data
+    ids = {obs.id for obs in observations}
     children: dict[str | None, list] = {}
     for obs in sorted(observations, key=lambda o: o.start_time):
-        children.setdefault(obs.parent_observation_id, []).append(obs)
+        # A parent that was never exported (or lives in another service) makes a root.
+        parent = obs.parent_observation_id if obs.parent_observation_id in ids else None
+        children.setdefault(parent, []).append(obs)
 
     def show(parent_id: str | None, depth: int) -> None:
         for obs in children.get(parent_id, []):

@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     hr_mcp_transport: Literal["stdio", "http"] = "stdio"
     hr_mcp_url: str = "http://localhost:8002/mcp"
 
+    # Observability (iteration 02); the Langfuse SDK also reads these from the environment.
+    langfuse_public_key: str | None = None
+    langfuse_secret_key: str | None = None
+    langfuse_base_url: str = "http://localhost:3000"
+
     # Iteration 08: where the UI finds the API.
     api_url: str = "http://localhost:8000"
 

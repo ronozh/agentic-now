@@ -84,6 +84,20 @@ A router agent delegates to two specialists (async tools) and merges their answe
 can run in-process or as an A2A service; the HR agent reaches its tools over MCP stdio or HTTP.
 A failed specialist is reported, not fatal.
 
+## API + UI
+
+```bash
+scripts/dev.sh      # Postgres, Langfuse, HR MCP (HTTP), Books A2A, API :8000, UI :8501
+curl -s localhost:8000/health
+curl -s -X POST localhost:8000/chat -H 'content-type: application/json' \
+  -d '{"session_id": "demo", "message": "What is our FTE in Engineering?"}'
+```
+
+FastAPI wraps the router with per-session memory (last 4 turns), `/feedback` (👍/👎 → Langfuse
+score on the answer's trace) and `/health`. The Streamlit UI shows answers, agents used, sources,
+and feedback buttons. One Langfuse trace covers API → router → HR agent → MCP tools and the Books
+agent in the A2A service (trace context travels in the A2A message metadata).
+
 ## Observability (Langfuse)
 
 ```bash
@@ -130,4 +144,4 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 - [x] 05 HR database + MCP — text-to-SQL
 - [x] 06 Semantic layer — governed metrics (headcount, FTE)
 - [x] 07 Multi-agent + A2A
-- [ ] 08 API + UI
+- [x] 08 API + UI

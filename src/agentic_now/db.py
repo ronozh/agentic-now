@@ -17,18 +17,19 @@ CONNECT_ATTEMPTS = 8
 CONNECT_BACKOFF_SECONDS = 3
 
 
-def connect(**kwargs) -> psycopg.Connection:
+def connect(attempts: int = CONNECT_ATTEMPTS, **kwargs) -> psycopg.Connection:
     """Connection with the pgvector type registered.
 
     Retries while Postgres restarts or runs crash recovery (seen under heavy host memory
-    pressure, see .plan/gotcha.md), so a long agent run survives a short outage.
+    pressure, see .plan/gotcha.md), so a long agent run survives a short outage. Probes such
+    as /health pass attempts=1 to fail fast.
     """
-    for attempt in range(1, CONNECT_ATTEMPTS + 1):
+    for attempt in range(1, attempts + 1):
         try:
             conn = psycopg.connect(settings.database_url, **kwargs)
             break
         except psycopg.OperationalError as e:
-            if attempt == CONNECT_ATTEMPTS:
+            if attempt == attempts:
                 raise
             logger.warning(
                 "Postgres not available (%s); retry %d", str(e).splitlines()[0], attempt

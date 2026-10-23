@@ -8,6 +8,7 @@ import uuid
 import httpx
 from fasta2a.client import A2AClient
 from fasta2a.schema import Message, Part
+from opentelemetry import propagate
 
 from agentic_now.config import settings
 from agentic_now.rag.answer import RagAnswer
@@ -33,8 +34,14 @@ async def ask_books_remote(question: str, url: str | None = None) -> RagAnswer:
 
 
 async def _ask(client: A2AClient, question: str) -> RagAnswer:
+    # W3C trace context in the metadata, so the service's spans join the caller's trace.
+    metadata: dict[str, str] = {}
+    propagate.inject(metadata)
     message = Message(
-        role="user", parts=[Part(text=question)], message_id=str(uuid.uuid4())
+        role="user",
+        parts=[Part(text=question)],
+        message_id=str(uuid.uuid4()),
+        metadata=metadata,
     )
     response = await client.send_message(message)
     if "error" in response:

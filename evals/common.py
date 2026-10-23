@@ -1,5 +1,6 @@
 """Helpers shared by the eval scripts."""
 
+import logging
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -9,6 +10,8 @@ from langfuse import get_client
 from pydantic_evals.reporting import EvaluationReport
 
 from agentic_now.obs import init_observability
+
+logger = logging.getLogger(__name__)
 
 EVALS_DIR = Path(__file__).parent
 RESULTS_DIR = EVALS_DIR / "results"
@@ -25,7 +28,8 @@ def summarize(report: EvaluationReport) -> dict[str, float]:
     """Mean of every metric over the cases that produced it, plus mean task duration.
 
     A case that crashed (`report.failures`) scores 0 on every metric, so failures can't make
-    an agent look better than it is.
+    an agent look better than it is. Crashed evaluators (`evaluator_failures`) are counted in
+    "failures" too: their metric is missing for that case, which would otherwise go unnoticed.
     """
     values: dict[str, list[float]] = defaultdict(list)
     for case in report.cases:
@@ -37,7 +41,10 @@ def summarize(report: EvaluationReport) -> dict[str, float]:
     summary["avg_seconds"] = (
         mean(c.task_duration for c in report.cases) if report.cases else 0.0
     )
-    summary["failures"] = float(len(report.failures))
+    evaluator_failures = sum(len(c.evaluator_failures) for c in report.cases)
+    if evaluator_failures:
+        logger.error("%d evaluator runs failed; see the report", evaluator_failures)
+    summary["failures"] = float(len(report.failures) + evaluator_failures)
     return summary
 
 

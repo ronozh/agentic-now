@@ -64,7 +64,8 @@ class SpecialistsOk(Evaluator[str, RouterOutput, RouterExpected]):
 
 @dataclass
 class HRValueCorrect(Evaluator[str, RouterOutput, RouterExpected]):
-    """Any HR sub-answer carries the true number (exact match)."""
+    """The HR specialist returned the true number AND the router's final answer quotes it
+    (the router could drop or garble it when merging answers)."""
 
     def evaluate(
         self, ctx: EvaluatorContext[str, RouterOutput, RouterExpected]
@@ -74,10 +75,12 @@ class HRValueCorrect(Evaluator[str, RouterOutput, RouterExpected]):
         with db.connect() as conn:
             truth = float(conn.execute(ctx.metadata.hr_truth_sql).fetchone()[0])
         values = [a.value for a in ctx.output.hr_answers]
-        ok = any(v is not None and abs(v - truth) < 1e-6 for v in values)
+        specialist_ok = any(v is not None and abs(v - truth) < 1e-6 for v in values)
+        quoted = f"{truth:g}" in ctx.output.answer.replace(",", "")
         return {
             "hr_value_correct": EvaluationReason(
-                value=ok, reason=f"expected {truth:g}, got {values}"
+                value=specialist_ok and quoted,
+                reason=f"expected {truth:g}, specialist {values}, quoted in answer: {quoted}",
             )
         }
 

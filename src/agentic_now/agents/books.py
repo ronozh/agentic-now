@@ -166,7 +166,9 @@ async def ask_async(question: str, k: int = 5) -> RagAnswer:
     get_client().update_current_span(metadata={"model": settings.chat_model, "k": k})
     started = time.perf_counter()
     # autocommit: no transaction left open while the LLM thinks for minutes.
-    with db.connect(autocommit=True) as conn:
+    # In a thread: connect retries sleep and must not block the event loop.
+    conn = await asyncio.to_thread(db.connect, autocommit=True)
+    with conn:
         result = await agent.run(
             question,
             deps=BooksDeps(conn=conn, k=k),
