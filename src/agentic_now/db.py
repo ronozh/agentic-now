@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 
 import psycopg
@@ -12,9 +13,27 @@ logger = logging.getLogger(__name__)
 SQL_DIR = Path(__file__).resolve().parents[2] / "sql"
 
 
+CONNECT_ATTEMPTS = 8
+CONNECT_BACKOFF_SECONDS = 3
+
+
 def connect(**kwargs) -> psycopg.Connection:
-    """Connection with the pgvector type registered."""
-    conn = psycopg.connect(settings.database_url, **kwargs)
+    """Connection with the pgvector type registered.
+
+    Retries while Postgres restarts or runs crash recovery (seen under heavy host memory
+    pressure, see .plan/gotcha.md), so a long agent run survives a short outage.
+    """
+    for attempt in range(1, CONNECT_ATTEMPTS + 1):
+        try:
+            conn = psycopg.connect(settings.database_url, **kwargs)
+            break
+        except psycopg.OperationalError as e:
+            if attempt == CONNECT_ATTEMPTS:
+                raise
+            logger.warning(
+                "Postgres not available (%s); retry %d", str(e).splitlines()[0], attempt
+            )
+            time.sleep(CONNECT_BACKOFF_SECONDS * attempt)
     register_vector(conn)
     return conn
 

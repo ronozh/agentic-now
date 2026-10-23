@@ -46,29 +46,34 @@ class Chunk:
 
 
 @observe(name="parse_pdf", capture_input=False, capture_output=False)
-def parse_pdf(path: Path) -> tuple[str, list[Page]]:
-    """Extract clean text per page, dropping boilerplate and footers."""
-    doc = pymupdf.open(path)
-    title = doc.metadata.get("title") or path.stem.replace("-", " ").title()
-    pages = []
-    for number, pdf_page in enumerate(doc, start=1):
-        lines, printed = [], None
-        for line in pdf_page.get_text().splitlines():
-            line = line.strip()
-            if not line or BOILERPLATE.match(line):
-                continue
-            if footer := FOOTER.search(line):
-                printed = int(footer.group(1) or footer.group(2))
-                continue
-            lines.append(line)
-        text = _join_lines(lines)
-        if len(text) >= MIN_PAGE_CHARS:
-            pages.append(Page(number, printed, text))
+def parse_pdf(path: Path) -> tuple[str, int, list[Page]]:
+    """Title, total page count and clean text per page (boilerplate and footers dropped)."""
+    with pymupdf.open(path) as doc:
+        title = doc.metadata.get("title") or path.stem.replace("-", " ").title()
+        page_count = len(doc)
+        pages = [
+            _parse_page(number, pdf_page)
+            for number, pdf_page in enumerate(doc, start=1)
+        ]
+    pages = [page for page in pages if len(page.text) >= MIN_PAGE_CHARS]
     _fill_printed_numbers(pages)
     get_client().update_current_span(
         input={"file": path.name}, output={"title": title, "pages": len(pages)}
     )
-    return title, pages
+    return title, page_count, pages
+
+
+def _parse_page(number: int, pdf_page: pymupdf.Page) -> Page:
+    lines, printed = [], None
+    for line in pdf_page.get_text().splitlines():
+        line = line.strip()
+        if not line or BOILERPLATE.match(line):
+            continue
+        if footer := FOOTER.search(line):
+            printed = int(footer.group(1) or footer.group(2))
+            continue
+        lines.append(line)
+    return Page(number, printed, _join_lines(lines))
 
 
 def _fill_printed_numbers(pages: list[Page]) -> None:
@@ -114,7 +119,7 @@ def chunk_text(
 @observe(name="ingest_file", capture_input=False, capture_output=False)
 def ingest_file(conn: psycopg.Connection, path: Path) -> None:
     started = time.perf_counter()
-    title, pages = parse_pdf(path)
+    title, page_count, pages = parse_pdf(path)
     chunks = [
         Chunk(page.number, page.printed_number, content)
         for page in pages
@@ -133,7 +138,7 @@ def ingest_file(conn: psycopg.Connection, path: Path) -> None:
         conn.execute("DELETE FROM documents WHERE file_name = %s", (path.name,))
         doc_id = conn.execute(
             "INSERT INTO documents (file_name, title, page_count) VALUES (%s, %s, %s) RETURNING id",
-            (path.name, title, len(pymupdf.open(path))),
+            (path.name, title, page_count),
         ).fetchone()[0]
         with conn.cursor() as cur:
             cur.executemany(

@@ -64,7 +64,7 @@ def build_prompt(question: str, hits: list[Hit]) -> str:
 @observe(name="rag_answer")
 def answer(question: str, k: int = 5) -> RagAnswer:
     get_client().update_current_span(metadata={"model": settings.chat_model, "k": k})
-    with db.connect() as conn:
+    with db.connect(autocommit=True) as conn:
         hits = retrieve(conn, question, k)
     started = time.perf_counter()
     result = agent.run_sync(build_prompt(question, hits))

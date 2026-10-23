@@ -1,8 +1,11 @@
 # Eval results
 
-| date | label | target | model | k | hit@k | mrr | citation_correct | keywords | answered | refusal_correct | judge | avg s |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 2026-10-23 23:59 | retrieval-k5 | retrieval | qwen3:8b | 5 | 1.00 | 0.66 | – | – | – | – | – | 0.0 |
-| 2026-10-23 23:59 | retrieval-k1 | retrieval | qwen3:8b | 1 | 0.38 | 0.38 | – | – | – | – | – | 0.0 |
-| 2026-10-23 23:59 | retrieval-k10 | retrieval | qwen3:8b | 10 | 1.00 | 0.66 | – | – | – | – | – | 0.0 |
-| 2026-10-24 00:06 | baseline | pipeline | qwen3:8b | 5 | 1.00 | 0.66 | 1.00 | 1.00 | 1.00 | 1.00 | 0.90 | 33.7 |
+| date | label | target | model | k | hit@k | mrr | citation_correct | keywords | answered | refusal_correct | judge | failures | avg s |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2026-10-23 23:59 | retrieval-k5 | retrieval | qwen3:8b | 5 | 1.00 | 0.66 | – | – | – | – | – | – | 0.0 |
+| 2026-10-23 23:59 | retrieval-k1 | retrieval | qwen3:8b | 1 | 0.38 | 0.38 | – | – | – | – | – | – | 0.0 |
+| 2026-10-23 23:59 | retrieval-k10 | retrieval | qwen3:8b | 10 | 1.00 | 0.66 | – | – | – | – | – | – | 0.0 |
+| 2026-10-24 00:06 | baseline | pipeline | qwen3:8b | 5 | 1.00 | 0.66 | 1.00 | 1.00 | 1.00 | 1.00 | 0.90 | – | 33.7 |
+| 2026-10-24 00:20 | pipeline-11 | pipeline | qwen3:8b | 5 | 1.00 | 0.62 | 0.78 | 0.94 | 1.00 | 1.00 | 0.91 | – | 21.8 |
+| 2026-10-24 00:39 | agent-11 | agent | qwen3:8b | 5 | 0.86 | 0.62 | 0.86 | 1.00 | 1.00 | 0.00 | 0.67 | 2 | 94.2 |
+| 2026-10-24 07:01 | agent-11-4b | agent | qwen3:4b-instruct | 5 | 0.94 | 0.67 | 0.78 | 0.78 | 0.78 | 1.00 | 0.64 | 0 | 15.2 |

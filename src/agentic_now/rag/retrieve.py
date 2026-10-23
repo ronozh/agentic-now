@@ -80,7 +80,7 @@ def main() -> None:
     init_observability()
     query = sys.argv[1]
     k = int(sys.argv[2]) if len(sys.argv) > 2 else 5
-    with db.connect() as conn:
+    with db.connect(autocommit=True) as conn:
         for rank, hit in enumerate(retrieve(conn, query, k), start=1):
             print(f"[{rank}] {hit.distance:.3f}  {hit.source.label}")
             print(f"    {hit.content[:200]}…\n")

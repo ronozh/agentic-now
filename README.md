@@ -11,8 +11,8 @@ Python 3.12 · uv · Ollama (local LLMs) · PostgreSQL + pgvector · Pydantic AI
 Prerequisites: [uv](https://docs.astral.sh/uv/), Docker, [Ollama](https://ollama.com) (run natively for GPU acceleration on Mac).
 
 ```bash
-scripts/ollama_serve.sh            # Ollama with 16K context (default 4K silently truncates)
-ollama pull qwen3:8b
+scripts/ollama_serve.sh            # Ollama with 8K context (default 4K silently truncates)
+ollama pull qwen3:4b-instruct      # dev default: fast, fits 16 GB; qwen3:8b for quality runs
 ollama pull nomic-embed-text
 
 cp .env.example .env
@@ -33,6 +33,15 @@ uv run python -m agentic_now.rag.answer   "What did Henri Fayol contribute to ma
 
 Answers cite the printed page and the PDF page, e.g. `Principles of Management, p. 64 (PDF p. 78)`.
 
+## Agentic RAG
+
+```bash
+uv run python -m agentic_now.agents.books "Compare Herzberg's two-factor theory with Taylor's scientific management"
+```
+
+Instead of one fixed retrieval, the agent decides what to do with its tools (`search`, `read_page`,
+`list_books`): it can search several times and read whole pages, and must cite what it used. It refuses questions the books don't cover.
+
 ## Observability (Langfuse)
 
 ```bash
@@ -43,7 +52,8 @@ uv run python scripts/show_trace.py           # latest trace as a tree in the te
 ```
 
 Pydantic AI agent runs, model calls and tool calls are traced automatically; our own steps use `@observe`.
-Without Langfuse keys in `.env`, tracing is off and everything still runs.
+Without Langfuse keys in `.env`, or when Langfuse is stopped, tracing is off and everything still runs.
+On 16 GB RAM, keep Langfuse stopped unless you are looking at traces (`docker compose stop`).
 
 ## Evaluation
 
@@ -51,6 +61,7 @@ Without Langfuse keys in `.env`, tracing is off and everything still runs.
 uv run python -m evals.rag_eval --target retrieval     # hit@k, MRR only: ~2s, deterministic
 uv run python -m evals.rag_eval                        # + answer checks + LLM judge: ~6 min
 uv run python -m evals.rag_eval --k 10 --label k10     # experiment; compare rows in evals/RESULTS.md
+uv run python -m evals.rag_eval --target agent --limit 3   # agentic RAG, smoke test on 3 cases
 ```
 
 Golden set: `evals/datasets/rag_golden.yaml` (pages verified by hand). Scores are also attached to each case's Langfuse trace.
@@ -71,7 +82,7 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 - [x] 01 Basic RAG — PDFs → pgvector → cited answers
 - [x] 02 Observability — Langfuse tracing
 - [x] 03 Evaluation — golden set + baseline
-- [ ] 04 Agentic RAG — agent-driven search
+- [x] 04 Agentic RAG — agent-driven search
 - [ ] 05 HR database + MCP — text-to-SQL
 - [ ] 06 Semantic layer — governed metrics (headcount, FTE)
 - [ ] 07 Multi-agent + A2A

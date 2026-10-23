@@ -53,6 +53,13 @@ cases:
       - {Organizational Behavior: [186, 187, 188, 189], Principles of Management: [410, 411, 412, 413]}
     keywords: [Fayol, Maslow]
 
+  - name: herzberg_vs_taylor
+    question: How does Herzberg's two-factor theory differ from Taylor's scientific management?
+    sources:
+      - {Organizational Behavior: [191, 192], Principles of Management: [415, 416]}
+      - {Principles of Management: [59, 61, 62, 63]}
+    keywords: [Herzberg, Taylor]
+
   - name: out_of_scope_capital
     question: What is the capital of Australia?
     out_of_scope: true

@@ -3,18 +3,17 @@
 Run:
   uv run python -m evals.rag_eval                          # retrieval + LLM answer + judge
   uv run python -m evals.rag_eval --target retrieval       # retrieval only: fast, deterministic
+  uv run python -m evals.rag_eval --target agent           # agentic RAG (iteration 04)
   uv run python -m evals.rag_eval --k 10 --label k10       # an experiment, compared in RESULTS.md
+  uv run python -m evals.rag_eval --limit 3                # smoke test on the first 3 cases
 """
 
 import argparse
 import json
 import logging
 import uuid
-from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from statistics import mean
 from typing import Literal
 
 import yaml
@@ -26,18 +25,26 @@ from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorCont
 from pydantic_evals.reporting import EvaluationReport
 
 from agentic_now import db
+from agentic_now.agents.books import ask
 from agentic_now.config import settings
 from agentic_now.llm import chat_model
 from agentic_now.log import setup_logging
 from agentic_now.obs import flush, init_observability
 from agentic_now.rag.answer import answer
 from agentic_now.rag.retrieve import Source, retrieve
+from evals.common import (
+    EVALS_DIR,
+    RESULTS_DIR,
+    append_row,
+    case_results,
+    push_scores,
+    summarize,
+    timestamp,
+)
 
 logger = logging.getLogger(__name__)
 
-EVALS_DIR = Path(__file__).parent
 DATASET = EVALS_DIR / "datasets" / "rag_golden.yaml"
-RESULTS_DIR = EVALS_DIR / "results"
 RESULTS_MD = EVALS_DIR / "RESULTS.md"
 METRICS = [
     "hit@k",
@@ -49,7 +56,7 @@ METRICS = [
     "judge",
 ]
 
-Target = Literal["retrieval", "pipeline"]
+Target = Literal["retrieval", "pipeline", "agent"]
 
 
 class Expected(BaseModel):
@@ -169,14 +176,16 @@ class AnswerJudge(Evaluator[str, EvalOutput, Expected]):
 # --- Dataset, task, reporting ------------------------------------------------------------
 
 
-def load_dataset(path: Path = DATASET) -> Dataset[str, EvalOutput, Expected]:
+def load_dataset(
+    path: Path = DATASET, limit: int | None = None
+) -> Dataset[str, EvalOutput, Expected]:
     cases = [
         Case(
             name=raw.pop("name"),
             inputs=raw.pop("question"),
             metadata=Expected(**raw),
         )
-        for raw in yaml.safe_load(path.read_text())["cases"]
+        for raw in yaml.safe_load(path.read_text())["cases"][:limit]
     ]
     return Dataset(
         name="rag_golden",
@@ -199,7 +208,9 @@ def make_task(target: Target, k: int):
                     answer=None, retrieved=[h.source for h in hits], trace_id=trace_id
                 )
             else:
-                result = answer(question, k)
+                result = (
+                    answer(question, k) if target == "pipeline" else ask(question, k)
+                )
                 output = EvalOutput(**result.model_dump(), trace_id=trace_id)
             span.update(output=output.model_dump(exclude={"trace_id"}))
         return output
@@ -207,35 +218,10 @@ def make_task(target: Target, k: int):
     return task
 
 
-def summarize(report: EvaluationReport) -> dict[str, float]:
-    values: dict[str, list[float]] = defaultdict(list)
-    for case in report.cases:
-        for name, result in {**case.scores, **case.assertions}.items():
-            values[name].append(float(result.value))
-    summary = {name: mean(v) for name, v in values.items()}
-    summary["avg_seconds"] = (
-        mean(c.task_duration for c in report.cases) if report.cases else 0.0
-    )
-    return summary
-
-
-def push_scores(report: EvaluationReport) -> None:
-    """Attach every metric to its case's trace, so scores can be inspected next to the trace."""
-    langfuse = get_client()
-    for case in report.cases:
-        for name, result in {**case.scores, **case.assertions}.items():
-            langfuse.create_score(
-                trace_id=case.output.trace_id,
-                name=name,
-                value=float(result.value),
-                comment=getattr(result, "reason", None),
-            )
-
-
 def record(
     summary: dict[str, float], report: EvaluationReport, args: argparse.Namespace
 ) -> None:
-    stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+    stamp = timestamp()
     RESULTS_DIR.mkdir(exist_ok=True)
     result_file = (
         RESULTS_DIR / f"{stamp.replace(' ', '_').replace(':', '')}-{args.label}.json"
@@ -252,9 +238,7 @@ def record(
                     {
                         "name": c.name,
                         "output": c.output.model_dump(exclude={"trace_id"}),
-                        "results": {
-                            n: r.value for n, r in {**c.scores, **c.assertions}.items()
-                        },
+                        "results": case_results(c),
                     }
                     for c in report.cases
                 ],
@@ -264,18 +248,22 @@ def record(
             default=str,
         )
     )
-    if not RESULTS_MD.exists():
-        RESULTS_MD.write_text(
-            "# Eval results\n\n"
-            f"| date | label | target | model | k | {' | '.join(METRICS)} | avg s |\n"
-            f"|{'---|' * (len(METRICS) + 6)}\n"
-        )
-    cells = [f"{summary[m]:.2f}" if m in summary else "–" for m in METRICS]
-    with RESULTS_MD.open("a") as f:
-        f.write(
-            f"| {stamp} | {args.label} | {args.target} | {settings.chat_model} | {args.k} | "
-            f"{' | '.join(cells)} | {summary['avg_seconds']:.1f} |\n"
-        )
+    label = args.label if args.limit is None else f"{args.label} (first {args.limit})"
+    append_row(
+        RESULTS_MD,
+        "Eval results",
+        ["date", "label", "target", "model", "k", *METRICS, "failures", "avg s"],
+        [
+            stamp,
+            label,
+            args.target,
+            settings.chat_model,
+            str(args.k),
+            *(f"{summary[m]:.2f}" if m in summary else "–" for m in METRICS),
+            f"{summary['failures']:.0f}",
+            f"{summary['avg_seconds']:.1f}",
+        ],
+    )
     logger.info("saved %s and appended %s", result_file.name, RESULTS_MD.name)
 
 
@@ -284,15 +272,16 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--target", choices=["retrieval", "pipeline"], default="pipeline"
+        "--target", choices=["retrieval", "pipeline", "agent"], default="pipeline"
     )
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--label", default="baseline")
+    parser.add_argument("--limit", type=int, help="only the first N cases (smoke test)")
     args = parser.parse_args()
 
     setup_logging()
     init_observability()
-    dataset = load_dataset()
+    dataset = load_dataset(limit=args.limit)
     with propagate_attributes(
         session_id=f"eval-{uuid.uuid4().hex[:8]}",
         tags=["eval", args.target, args.label],
