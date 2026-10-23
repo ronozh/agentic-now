@@ -1,6 +1,6 @@
 """HR MCP server, connecting as the read-only `hr_readonly` role.
 
-Tools: schema discovery and read-only SQL (iteration 05).
+Tools: raw SQL (iteration 05) and governed metrics from the semantic layer (iteration 06).
 
 Run (stdio):      uv run python -m agentic_now.mcp_servers.hr_server
 Run (HTTP):       uv run python -m agentic_now.mcp_servers.hr_server --transport http --port 8002
@@ -10,6 +10,7 @@ Inspect:          uv run fastmcp dev inspector src/agentic_now/mcp_servers/hr_se
 import argparse
 import logging
 import re
+from datetime import date
 from typing import Any
 
 import psycopg
@@ -19,6 +20,7 @@ from psycopg.rows import dict_row
 
 from agentic_now.config import settings
 from agentic_now.log import setup_logging
+from agentic_now.semantic.layer import SemanticError, compile_metric, load
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +86,13 @@ def describe_table(table: str) -> dict[str, Any]:
             sql.Identifier("hr", found[0]["relname"])
         )
     )
-    return {"table": f"hr.{table}", "columns": columns, "sample_rows": samples}
+    # Small models count the samples as if they were the table; say what they are.
+    return {
+        "table": f"hr.{table}",
+        "columns": columns,
+        "examples_only_3_of_many_rows": samples,
+        "note": "To count or aggregate, call run_readonly_sql.",
+    }
 
 
 @mcp.tool
@@ -110,6 +118,58 @@ def run_readonly_sql(sql: str) -> dict[str, Any]:
         "row_count": len(rows),
         "truncated": len(rows) > MAX_ROWS,
         "rows": rows[:MAX_ROWS],
+    }
+
+
+# --- Semantic layer tools (iteration 06): the agent picks a metric, never writes SQL ------
+
+
+@mcp.tool
+def list_metrics() -> dict[str, Any]:
+    """List governed HR metrics with their definitions, synonyms and the allowed dimensions.
+
+    Use these instead of writing SQL: they encode the official business definitions.
+    """
+    layer = load()
+    return {
+        "metrics": {
+            name: {"definition": m.description, "synonyms": m.synonyms}
+            for name, m in layer.metrics.items()
+        },
+        "dimensions": {name: d.description for name, d in layer.dimensions.items()},
+    }
+
+
+@mcp.tool
+def query_metric(
+    metric: str,
+    as_of: str | None = None,
+    group_by: list[str] | None = None,
+    filters: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Compute a governed HR metric.
+
+    Args:
+        metric: Metric name from list_metrics, e.g. "headcount" or "fte".
+        as_of: Date as YYYY-MM-DD. Defaults to today. Future dates need "headcount_projected".
+        group_by: Dimensions to break the result down by, e.g. ["department"].
+        filters: Dimension values to filter on, e.g. {"employment_type": "part_time"}.
+    """
+    try:
+        as_of_date = date.fromisoformat(as_of) if as_of else date.today()
+        layer = load()
+        query, params = compile_metric(layer, metric, as_of_date, group_by, filters)
+    except (SemanticError, ValueError) as e:
+        return {"error": str(e)}
+    try:
+        rows = _query(query, params)
+    except psycopg.Error as e:
+        return {"error": str(e).strip()}
+    return {
+        "metric": metric,
+        "as_of": as_of_date.isoformat(),
+        "definition": layer.metric(metric).description,
+        "rows": rows,
     }
 
 

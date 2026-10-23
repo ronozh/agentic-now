@@ -54,6 +54,19 @@ The HR agent gets its tools (`list_tables`, `describe_table`, `run_readonly_sql`
 server that connects as a read-only role with a statement timeout. Simple questions work;
 "headcount" questions don't, because the data has traps (part-time, contractors, leave, future exits).
 
+## Semantic layer
+
+```bash
+uv run python -m agentic_now.agents.hr "What is our headcount today?"          # 364, not 500
+uv run python -m agentic_now.agents.hr "What will our headcount be at year end?"
+uv run pytest                                                                  # metric definitions
+```
+
+Business definitions live in `src/agentic_now/semantic/metrics.yaml` (who is an employee, part-time =
+0.5 FTE, which leave statuses count, projections). The agent picks a metric with `list_metrics` /
+`query_metric` and the layer compiles point-in-time SQL; raw SQL is only the fallback for questions
+no metric covers. Change a policy in the YAML, not in a prompt.
+
 ## Observability (Langfuse)
 
 ```bash
@@ -74,7 +87,8 @@ uv run python -m evals.rag_eval --target retrieval     # hit@k, MRR only: ~2s, d
 uv run python -m evals.rag_eval                        # + answer checks + LLM judge: ~6 min
 uv run python -m evals.rag_eval --k 10 --label k10     # experiment; compare rows in evals/RESULTS.md
 uv run python -m evals.rag_eval --target agent --limit 3   # agentic RAG, smoke test on 3 cases
-uv run python -m evals.hr_eval                         # HR agent vs ground-truth SQL (evals/RESULTS_HR.md)
+uv run python -m evals.hr_eval --mode sql              # HR agent vs ground-truth SQL (evals/RESULTS_HR.md)
+uv run python -m evals.hr_eval --mode semantic         # same questions via the semantic layer
 ```
 
 Golden set: `evals/datasets/rag_golden.yaml` (pages verified by hand). Scores are also attached to each case's Langfuse trace.
@@ -97,6 +111,6 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 - [x] 03 Evaluation — golden set + baseline
 - [x] 04 Agentic RAG — agent-driven search
 - [x] 05 HR database + MCP — text-to-SQL
-- [ ] 06 Semantic layer — governed metrics (headcount, FTE)
+- [x] 06 Semantic layer — governed metrics (headcount, FTE)
 - [ ] 07 Multi-agent + A2A
 - [ ] 08 API + UI

@@ -1,14 +1,19 @@
-"""Iteration 05: HR agent. Answers HR questions by writing SQL through the HR MCP server.
+"""HR agent over the HR MCP server, in two modes:
 
-Run: uv run python -m agentic_now.agents.hr "How many departments are there?"
+- sql (iteration 05): text-to-SQL; the LLM must guess business definitions.
+- semantic (iteration 06): the LLM picks a governed metric; the semantic layer writes the SQL.
+
+Run: uv run python -m agentic_now.agents.hr [--mode sql|semantic] "What is our headcount today?"
 """
 
+import argparse
 import logging
 import re
 import sys
 import time
 import uuid
 from datetime import date
+from typing import Literal
 
 from fastmcp import Client
 from fastmcp.client.transports import StdioTransport
@@ -17,6 +22,7 @@ from pydantic import BaseModel, Field
 from pydantic_ai import Agent, RunContext, TextOutput, ToolOutput, UsageLimits
 from pydantic_ai.mcp import MCPToolset
 from pydantic_ai.messages import ToolCallPart
+from pydantic_ai.toolsets import AbstractToolset
 
 from agentic_now.config import settings
 from agentic_now.llm import chat_model
@@ -25,6 +31,7 @@ from agentic_now.obs import flush, init_observability
 
 logger = logging.getLogger(__name__)
 
+Mode = Literal["sql", "semantic"]
 MAX_REQUESTS = 12
 
 SQL_INSTRUCTIONS = """\
@@ -36,6 +43,26 @@ Follow these steps:
 3. Call final_answer: the main number in `value`, the SQL you used in `sql_used`.
 """
 
+SEMANTIC_INSTRUCTIONS = """\
+You answer questions about the company's workforce. Governed metrics come first.
+Follow these steps:
+1. Call list_metrics. If a metric matches the question (headcount, FTE, leave, projections),
+   call query_metric. Use filters or group_by for subsets. as_of is a date YYYY-MM-DD
+   (default today); for a future date such as year end, use headcount_projected. If it
+   returns an error, read it and fix the call. Never compute such numbers with SQL.
+2. Only if no metric matches (e.g. departments, hires, requisitions), call describe_table and
+   run_readonly_sql. Tables are in schema hr, e.g. hr.employees.
+3. Call final_answer with the number in `value` and any SQL you ran in `sql_used`. For a
+   metric, briefly state its definition (e.g. "excludes contractors and interns"); for
+   projections, say it assumes approved requisitions are hired.
+"""
+
+TOOLS = {
+    "sql": {"list_tables", "describe_table", "run_readonly_sql"},
+    # Metrics first, raw SQL as the fallback for questions no metric covers.
+    "semantic": {"list_metrics", "query_metric", "describe_table", "run_readonly_sql"},
+}
+
 
 class HRAnswer(BaseModel):
     answer: str = Field(description="Short answer in plain English.")
@@ -45,12 +72,18 @@ class HRAnswer(BaseModel):
     )
 
 
-def hr_mcp_toolset() -> MCPToolset:
-    """The HR MCP server as a subprocess over stdio (iteration 07 adds HTTP)."""
+def hr_mcp_toolset(tool_names: set[str]) -> AbstractToolset:
+    """The HR MCP server as a subprocess over stdio, exposing only `tool_names` to the agent."""
     transport = StdioTransport(
         command=sys.executable, args=["-m", "agentic_now.mcp_servers.hr_server"]
     )
-    return MCPToolset(Client(transport))
+    return MCPToolset(Client(transport)).filtered(
+        lambda _ctx, tool: tool.name in tool_names
+    )
+
+
+def today() -> str:
+    return f"Today's date is {date.today().isoformat()}."
 
 
 def text_answer(ctx: RunContext, text: str) -> HRAnswer:
@@ -73,25 +106,30 @@ def text_answer(ctx: RunContext, text: str) -> HRAnswer:
     )
 
 
-agent = Agent(
-    chat_model(),
-    toolsets=[hr_mcp_toolset()],
-    output_type=[ToolOutput(HRAnswer, name="final_answer"), TextOutput(text_answer)],
-    instructions=SQL_INSTRUCTIONS,
-    name="hr",
-)
-
-
-@agent.instructions
-def today() -> str:
-    return f"Today's date is {date.today().isoformat()}."
+def _build(mode: Mode) -> Agent[None, HRAnswer]:
+    """A fresh agent per call: an MCP session is bound to one event loop, and callers
+    (router tools, API requests) run on different threads with their own loops."""
+    agent = Agent(
+        chat_model(),
+        toolsets=[hr_mcp_toolset(TOOLS[mode])],
+        output_type=[
+            ToolOutput(HRAnswer, name="final_answer"),
+            TextOutput(text_answer),
+        ],
+        instructions=SQL_INSTRUCTIONS if mode == "sql" else SEMANTIC_INSTRUCTIONS,
+        name=f"hr_{mode}",
+    )
+    agent.instructions(today)
+    return agent
 
 
 @observe(name="hr_agent")
-def ask(question: str) -> HRAnswer:
-    get_client().update_current_span(metadata={"model": settings.chat_model})
+def ask(question: str, mode: Mode = "semantic") -> HRAnswer:
+    get_client().update_current_span(
+        metadata={"model": settings.chat_model, "mode": mode}
+    )
     started = time.perf_counter()
-    result = agent.run_sync(
+    result = _build(mode).run_sync(
         question, usage_limits=UsageLimits(request_limit=MAX_REQUESTS)
     )
     tools = [
@@ -101,7 +139,8 @@ def ask(question: str) -> HRAnswer:
         if isinstance(part, ToolCallPart)
     ]
     logger.info(
-        "hr agent answered in %.1fs (requests=%d, tools=%s, sql=%r)",
+        "hr agent (%s) answered in %.1fs (requests=%d, tools=%s, sql=%r)",
+        mode,
         time.perf_counter() - started,
         result.usage.requests,
         tools,
@@ -111,12 +150,16 @@ def ask(question: str) -> HRAnswer:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("question")
+    parser.add_argument("--mode", choices=list(TOOLS), default="semantic")
+    args = parser.parse_args()
     setup_logging()
     init_observability()
     with propagate_attributes(
-        session_id=str(uuid.uuid4()), user_id="dev", tags=["hr-agent", "cli"]
+        session_id=str(uuid.uuid4()), user_id="dev", tags=["hr-agent", args.mode, "cli"]
     ):
-        result = ask(sys.argv[1])
+        result = ask(args.question, args.mode)
     flush()
     print(result.answer)
     print(f"  value: {result.value}")

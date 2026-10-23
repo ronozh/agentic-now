@@ -1,8 +1,8 @@
 """HR agent evaluation: is the number in the answer correct?
 
 Run:
-  uv run python -m evals.hr_eval                    # text-to-SQL agent (iteration 05)
-  uv run python -m evals.hr_eval --label my-run
+  uv run python -m evals.hr_eval --mode sql         # text-to-SQL agent (iteration 05)
+  uv run python -m evals.hr_eval --mode semantic    # semantic layer agent (iteration 06)
 """
 
 import argparse
@@ -20,7 +20,7 @@ from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
 from agentic_now import db
-from agentic_now.agents.hr import ask
+from agentic_now.agents.hr import Mode, ask
 from agentic_now.config import settings
 from agentic_now.log import setup_logging
 from agentic_now.obs import flush, init_observability
@@ -83,26 +83,30 @@ def load_dataset(
     return Dataset(name="hr_golden", cases=cases, evaluators=[ValueCorrect()])
 
 
-def task(question: str) -> HROutput:
-    langfuse = get_client()
-    with langfuse.start_as_current_observation(
-        name="eval_case", input=question
-    ) as span:
-        result = ask(question)
-        output = HROutput(
-            **result.model_dump(), trace_id=langfuse.get_current_trace_id()
-        )
-        span.update(output=result.model_dump())
-    return output
+def make_task(mode: Mode):
+    def task(question: str) -> HROutput:
+        langfuse = get_client()
+        with langfuse.start_as_current_observation(
+            name="eval_case", input=question
+        ) as span:
+            result = ask(question, mode)
+            span.update(output=result.model_dump())
+            return HROutput(
+                **result.model_dump(), trace_id=langfuse.get_current_trace_id()
+            )
+
+    return task
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--label", default="sql")
+    parser.add_argument("--mode", choices=["sql", "semantic"], default="semantic")
+    parser.add_argument("--label", default=None, help="defaults to the mode")
     parser.add_argument("--limit", type=int, help="only the first N cases (smoke test)")
     args = parser.parse_args()
+    args.label = args.label or args.mode
 
     setup_logging()
     init_observability()
@@ -110,7 +114,7 @@ def main() -> None:
         session_id=f"eval-{uuid.uuid4().hex[:8]}", tags=["eval", "hr", args.label]
     ):
         report = load_dataset(limit=args.limit).evaluate_sync(
-            task, max_concurrency=1, progress=False
+            make_task(args.mode), max_concurrency=1, progress=False
         )
     report.print(include_reasons=True)
     if report.failures:
@@ -121,12 +125,14 @@ def main() -> None:
         )
 
     summary = summarize(report)
+    # Failed (crashed) cases count as wrong.
     by_kind = {
         kind: [
             case_results(c).get("value_correct", 0.0)
             for c in report.cases
             if c.metadata.kind == kind
         ]
+        + [0.0 for f in report.failures if f.metadata.kind == kind]
         for kind in ("easy", "trap")
     }
     accuracy = {kind: sum(v) / len(v) if v else 0.0 for kind, v in by_kind.items()}

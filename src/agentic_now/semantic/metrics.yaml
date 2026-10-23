@@ -1,0 +1,61 @@
+# Semantic layer: the business definitions of HR metrics.
+# Owned by HR, versioned in git, tested in tests/test_semantic.py. Change policy here, not in prompts.
+
+# Who counts as an "employee". Contractors and interns are excluded from every metric.
+employee_types: [full_time, part_time]
+
+# FTE weight per employment type (policy: a part-timer counts as half).
+fte_weights:
+  full_time: 1.0
+  part_time: 0.5
+
+dimensions:
+  department:
+    description: Department name, e.g. Engineering, Sales.
+    sql: d.name
+    requisition_sql: d.name
+  location:
+    description: Office location, e.g. San Francisco, New York.
+    sql: d.location
+    requisition_sql: d.location
+  employment_type:
+    description: full_time or part_time.
+    sql: e.employment_type
+    requisition_sql: r.employment_type
+  status:
+    description: Employment status on the date - active, paid_leave or unpaid_leave.
+    sql: h.status
+
+metrics:
+  headcount:
+    description: >-
+      Number of employees (full-time and part-time) whose status on the date is active,
+      paid leave or unpaid leave. Each person counts as 1. Contractors, interns and people
+      who have left are excluded.
+    statuses: [active, paid_leave, unpaid_leave]
+    measure: count
+    synonyms: [head count, number of employees, staff count, how many employees]
+
+  fte:
+    description: >-
+      Full-time equivalent: full-time employees count 1.0 and part-time 0.5. Employees on
+      unpaid leave count 0; paid leave counts. Contractors and interns are excluded.
+    statuses: [active, paid_leave]
+    measure: fte
+    synonyms: [full-time equivalent, FTEs]
+
+  headcount_on_leave:
+    description: Employees on paid or unpaid leave on the date (filter by status for one kind).
+    statuses: [paid_leave, unpaid_leave]
+    measure: count
+    synonyms: [people on leave, employees on leave]
+
+  headcount_projected:
+    description: >-
+      Expected headcount on a FUTURE date: headcount on that date (planned exits applied)
+      plus approved requisitions starting after today and on or before that date.
+      Assumes every approved requisition is hired on time.
+    statuses: [active, paid_leave, unpaid_leave]
+    measure: count
+    projected: true
+    synonyms: [forecast headcount, headcount by year end, future headcount]
