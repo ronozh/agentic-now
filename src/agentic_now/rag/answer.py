@@ -6,13 +6,17 @@ Run: uv run python -m agentic_now.rag.answer "question"
 import logging
 import sys
 import time
+import uuid
 
+from langfuse import get_client, observe, propagate_attributes
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, NativeOutput
 
 from agentic_now import db
+from agentic_now.config import settings
 from agentic_now.llm import chat_model
 from agentic_now.log import setup_logging
+from agentic_now.obs import flush, init_observability
 from agentic_now.rag.retrieve import Hit, retrieve
 
 logger = logging.getLogger(__name__)
@@ -55,7 +59,9 @@ def build_prompt(question: str, hits: list[Hit]) -> str:
     return f"Context:\n\n{blocks}\n\nQuestion: {question}"
 
 
+@observe(name="rag_answer")
 def answer(question: str, k: int = 5) -> RagAnswer:
+    get_client().update_current_span(metadata={"model": settings.chat_model, "k": k})
     with db.connect() as conn:
         hits = retrieve(conn, question, k)
     started = time.perf_counter()
@@ -83,7 +89,12 @@ def answer(question: str, k: int = 5) -> RagAnswer:
 
 def main() -> None:
     setup_logging()
-    result = answer(sys.argv[1])
+    init_observability()
+    with propagate_attributes(
+        session_id=str(uuid.uuid4()), user_id="dev", tags=["rag", "cli"]
+    ):
+        result = answer(sys.argv[1])
+    flush()
     print(result.answer)
     for citation in result.citations:
         print(f"  - {citation}")

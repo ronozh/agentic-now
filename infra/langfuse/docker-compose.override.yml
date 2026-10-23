@@ -1,0 +1,32 @@
+# Local-dev overrides for the official Langfuse compose file (docker-compose.yml, unmodified).
+# Compose merges this file automatically. Keys below are for localhost only, not secrets.
+x-no-restart: &no-restart
+  restart: "no" # don't take RAM at boot on a 16 GB laptop
+
+services:
+  langfuse-web:
+    <<: *no-restart
+    environment:
+      TELEMETRY_ENABLED: "false"
+      # Headless setup: org, project, API keys and a login are created on first start.
+      LANGFUSE_INIT_ORG_ID: agentic-now
+      LANGFUSE_INIT_ORG_NAME: agentic-now
+      LANGFUSE_INIT_PROJECT_ID: agentic-now
+      LANGFUSE_INIT_PROJECT_NAME: agentic-now
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: pk-lf-agentic-now-local
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: sk-lf-agentic-now-local
+      LANGFUSE_INIT_USER_EMAIL: admin@agentic-now.local
+      LANGFUSE_INIT_USER_NAME: admin
+      LANGFUSE_INIT_USER_PASSWORD: agentic-now-local
+  langfuse-worker:
+    <<: *no-restart
+    environment:
+      TELEMETRY_ENABLED: "false"
+  clickhouse:
+    <<: *no-restart
+  minio:
+    <<: *no-restart
+  redis:
+    <<: *no-restart
+  postgres:
+    <<: *no-restart

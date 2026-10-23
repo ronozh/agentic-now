@@ -33,6 +33,18 @@ uv run python -m agentic_now.rag.answer   "What did Henri Fayol contribute to ma
 
 Answers cite the printed page and the PDF page, e.g. `Principles of Management, p. 64 (PDF p. 78)`.
 
+## Observability (Langfuse)
+
+```bash
+(cd infra/langfuse && docker compose up -d)   # ~2 GB RAM; UI http://localhost:3000
+                                              # login admin@agentic-now.local / agentic-now-local
+uv run python -m agentic_now.rag.answer "What is Maslow's hierarchy of needs?"
+uv run python scripts/show_trace.py           # latest trace as a tree in the terminal
+```
+
+Pydantic AI agent runs, model calls and tool calls are traced automatically; our own steps use `@observe`.
+Without Langfuse keys in `.env`, tracing is off and everything still runs.
+
 ## Configuration
 
 All settings come from `.env` (see `.env.example`). Swap the chat model without code changes:
@@ -47,7 +59,7 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 
 - [x] 00 Foundation — infra + hello-world agent with a tool
 - [x] 01 Basic RAG — PDFs → pgvector → cited answers
-- [ ] 02 Observability — Langfuse tracing
+- [x] 02 Observability — Langfuse tracing
 - [ ] 03 Evaluation — golden set + baseline
 - [ ] 04 Agentic RAG — agent-driven search
 - [ ] 05 HR database + MCP — text-to-SQL

@@ -9,9 +9,11 @@ import time
 from dataclasses import dataclass
 
 import psycopg
+from langfuse import get_client, observe
 
 from agentic_now import db
 from agentic_now.log import setup_logging
+from agentic_now.obs import flush, init_observability
 from agentic_now.rag.embed import embed_query
 
 logger = logging.getLogger(__name__)
@@ -32,7 +34,9 @@ class Hit:
         return f"{self.title}, PDF p. {self.page}"
 
 
+@observe(name="retrieve", as_type="retriever", capture_input=False)
 def retrieve(conn: psycopg.Connection, query: str, k: int = 5) -> list[Hit]:
+    get_client().update_current_span(input={"query": query, "k": k})
     started = time.perf_counter()
     rows = conn.execute(
         """
@@ -56,12 +60,14 @@ def retrieve(conn: psycopg.Connection, query: str, k: int = 5) -> list[Hit]:
 
 def main() -> None:
     setup_logging()
+    init_observability()
     query = sys.argv[1]
     k = int(sys.argv[2]) if len(sys.argv) > 2 else 5
     with db.connect() as conn:
         for rank, hit in enumerate(retrieve(conn, query, k), start=1):
             print(f"[{rank}] {hit.distance:.3f}  {hit.source}")
             print(f"    {hit.content[:200]}…\n")
+    flush()
 
 
 if __name__ == "__main__":

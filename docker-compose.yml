@@ -2,6 +2,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: agentic-postgres
+    shm_size: 256mb # Docker's 64 MB default is tight for Postgres
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

@@ -12,9 +12,11 @@ from pathlib import Path
 
 import psycopg
 import pymupdf
+from langfuse import get_client, observe, propagate_attributes
 
 from agentic_now import db
 from agentic_now.log import setup_logging
+from agentic_now.obs import flush, init_observability
 from agentic_now.rag.embed import embed_documents
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,7 @@ class Chunk:
     content: str
 
 
+@observe(name="parse_pdf", capture_input=False, capture_output=False)
 def parse_pdf(path: Path) -> tuple[str, list[Page]]:
     """Extract clean text per page, dropping boilerplate and footers."""
     doc = pymupdf.open(path)
@@ -62,6 +65,9 @@ def parse_pdf(path: Path) -> tuple[str, list[Page]]:
         if len(text) >= MIN_PAGE_CHARS:
             pages.append(Page(number, printed, text))
     _fill_printed_numbers(pages)
+    get_client().update_current_span(
+        input={"file": path.name}, output={"title": title, "pages": len(pages)}
+    )
     return title, pages
 
 
@@ -105,6 +111,7 @@ def chunk_text(
     return chunks
 
 
+@observe(name="ingest_file", capture_input=False, capture_output=False)
 def ingest_file(conn: psycopg.Connection, path: Path) -> None:
     started = time.perf_counter()
     title, pages = parse_pdf(path)
@@ -139,10 +146,15 @@ def ingest_file(conn: psycopg.Connection, path: Path) -> None:
             )
     elapsed = time.perf_counter() - started
     logger.info("%s: stored %d chunks in %.0fs", title, len(chunks), elapsed)
+    get_client().update_current_span(
+        input={"file": path.name},
+        output={"title": title, "pages": len(pages), "chunks": len(chunks)},
+    )
 
 
 def main() -> None:
     setup_logging()
+    init_observability()
     target = Path(sys.argv[1] if len(sys.argv) > 1 else "data/books")
     files = sorted(target.glob("*.pdf")) if target.is_dir() else [target]
     if not files:
@@ -150,7 +162,11 @@ def main() -> None:
     db.init_db()
     with db.connect() as conn:
         for path in files:
-            ingest_file(conn, path)
+            with propagate_attributes(
+                trace_name=f"ingest {path.name}", tags=["ingest"]
+            ):
+                ingest_file(conn, path)
+    flush()
 
 
 if __name__ == "__main__":
