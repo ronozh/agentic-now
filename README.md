@@ -45,6 +45,16 @@ uv run python scripts/show_trace.py           # latest trace as a tree in the te
 Pydantic AI agent runs, model calls and tool calls are traced automatically; our own steps use `@observe`.
 Without Langfuse keys in `.env`, tracing is off and everything still runs.
 
+## Evaluation
+
+```bash
+uv run python -m evals.rag_eval --target retrieval     # hit@k, MRR only: ~2s, deterministic
+uv run python -m evals.rag_eval                        # + answer checks + LLM judge: ~6 min
+uv run python -m evals.rag_eval --k 10 --label k10     # experiment; compare rows in evals/RESULTS.md
+```
+
+Golden set: `evals/datasets/rag_golden.yaml` (pages verified by hand). Scores are also attached to each case's Langfuse trace.
+
 ## Configuration
 
 All settings come from `.env` (see `.env.example`). Swap the chat model without code changes:
@@ -60,7 +70,7 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 - [x] 00 Foundation — infra + hello-world agent with a tool
 - [x] 01 Basic RAG — PDFs → pgvector → cited answers
 - [x] 02 Observability — Langfuse tracing
-- [ ] 03 Evaluation — golden set + baseline
+- [x] 03 Evaluation — golden set + baseline
 - [ ] 04 Agentic RAG — agent-driven search
 - [ ] 05 HR database + MCP — text-to-SQL
 - [ ] 06 Semantic layer — governed metrics (headcount, FTE)

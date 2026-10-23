@@ -17,7 +17,7 @@ from agentic_now.config import settings
 from agentic_now.llm import chat_model
 from agentic_now.log import setup_logging
 from agentic_now.obs import flush, init_observability
-from agentic_now.rag.retrieve import Hit, retrieve
+from agentic_now.rag.retrieve import Hit, Source, retrieve
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +42,8 @@ class LLMAnswer(BaseModel):
 
 class RagAnswer(BaseModel):
     answer: str
-    citations: list[str]
+    citations: list[Source]
+    retrieved: list[Source]  # what the LLM was shown, in rank order (used by evals)
 
 
 # NativeOutput: Ollama constrains decoding to the JSON schema, so output is always valid JSON.
@@ -54,7 +55,8 @@ agent = Agent(
 
 def build_prompt(question: str, hits: list[Hit]) -> str:
     blocks = "\n\n".join(
-        f"[{i}] ({hit.source})\n{hit.content}" for i, hit in enumerate(hits, start=1)
+        f"[{i}] ({hit.source.label})\n{hit.content}"
+        for i, hit in enumerate(hits, start=1)
     )
     return f"Context:\n\n{blocks}\n\nQuestion: {question}"
 
@@ -84,7 +86,11 @@ def answer(question: str, k: int = 5) -> RagAnswer:
             hits[n - 1].source for n in result.output.sources if 1 <= n <= len(hits)
         )
     )
-    return RagAnswer(answer=result.output.answer, citations=citations)
+    return RagAnswer(
+        answer=result.output.answer,
+        citations=citations,
+        retrieved=[hit.source for hit in hits],
+    )
 
 
 def main() -> None:
@@ -97,7 +103,7 @@ def main() -> None:
     flush()
     print(result.answer)
     for citation in result.citations:
-        print(f"  - {citation}")
+        print(f"  - {citation.label}")
 
 
 if __name__ == "__main__":

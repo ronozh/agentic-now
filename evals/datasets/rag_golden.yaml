@@ -1,0 +1,62 @@
+# RAG golden set. Pages are PRINTED page numbers, verified by hand in the PDFs.
+# sources: list of groups; each group is one fact that must be found. Any listed page
+#          in any listed book satisfies the group (OpenStax reuses chapters across books).
+# keywords: terms a correct answer must mention (case-insensitive).
+# out_of_scope: the books don't cover it; the correct answer is a refusal.
+cases:
+  - name: maslow_levels
+    question: What are the five levels of Maslow's hierarchy of needs?
+    sources:
+      - {Organizational Behavior: [186, 187, 188, 189], Principles of Management: [410, 411, 412, 413]}
+    keywords: [physiological, safety, esteem, self-actualization]
+
+  - name: team_stages
+    question: What are the stages of team development?
+    sources:
+      - {Organizational Behavior: [254, 255, 276, 284, 285], Principles of Management: [445, 459]}
+    keywords: [forming, storming, norming, performing]
+
+  - name: fayol_contribution
+    question: What did Henri Fayol contribute to management theory?
+    sources:
+      - {Principles of Management: [63, 64, 65, 72]}
+    keywords: [principles, administrative]
+
+  - name: herzberg_factors
+    question: What are Herzberg's hygiene factors and motivators?
+    sources:
+      - {Organizational Behavior: [191, 192], Principles of Management: [415, 416]}
+    keywords: [hygiene, motivat]
+
+  - name: taylor_scientific_management
+    question: What are the principles of Frederick Taylor's scientific management?
+    sources:
+      - {Principles of Management: [59, 61, 62, 63]}
+    keywords: [scientific]
+
+  - name: swot_analysis
+    question: What does a SWOT analysis examine?
+    sources:
+      - {Principles of Management: [221, 222, 223, 224, 241, 242], Organizational Behavior: [443, 444]}
+    keywords: [strengths, weaknesses, opportunities, threats]
+
+  - name: groupthink
+    question: What is groupthink?
+    sources:
+      - {Organizational Behavior: [166, 167, 168, 169, 170, 171, 260], Principles of Management: [42, 43, 44, 45, 46, 47, 453, 460]}
+    keywords: [group]
+
+  - name: fayol_vs_maslow
+    question: Compare Henri Fayol's administrative theory with Maslow's hierarchy of needs.
+    sources:
+      - {Principles of Management: [63, 64, 65, 72]}
+      - {Organizational Behavior: [186, 187, 188, 189], Principles of Management: [410, 411, 412, 413]}
+    keywords: [Fayol, Maslow]
+
+  - name: out_of_scope_capital
+    question: What is the capital of Australia?
+    out_of_scope: true
+
+  - name: out_of_scope_sports
+    question: Who won the 2018 FIFA World Cup?
+    out_of_scope: true

@@ -12,9 +12,11 @@ dependencies = [
     "pgvector>=0.5.1",
     "psycopg[binary]>=3.3.6",
     "pydantic-ai-slim[openai]>=2.60.0",
+    "pydantic-evals>=2.60.0",
     "pydantic-settings>=2.16.1",
     "pymupdf>=2.0",
     "python-dotenv>=1.2.4",
+    "pyyaml>=6.0.3",
 ]
 
 [build-system]
