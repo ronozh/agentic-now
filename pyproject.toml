@@ -1,0 +1,26 @@
+[project]
+name = "agentic-now"
+version = "0.1.0"
+description = "Hands-on agentic system: RAG, MCP, semantic layer, multi-agent, observability and evals on a local open-source stack"
+readme = "README.md"
+authors = [
+    { name = "Rong Zhang", email = "ronozh@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "pgvector>=0.5.1",
+    "psycopg[binary]>=3.3.6",
+    "pydantic-ai-slim[openai]>=2.60.0",
+    "pydantic-settings>=2.16.1",
+    "python-dotenv>=1.2.4",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.8,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]

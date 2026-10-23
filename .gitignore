@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Env / secrets
+.env
+
+# Local planning notes
+.plan/
+
+# Data (PDFs, eval outputs)
+data/
+evals/results/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
