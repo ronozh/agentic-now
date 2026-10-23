@@ -7,6 +7,7 @@ Run: uv run python -m agentic_now.agents.hr [--mode sql|semantic] "What is our h
 """
 
 import argparse
+import asyncio
 import logging
 import re
 import sys
@@ -73,13 +74,18 @@ class HRAnswer(BaseModel):
 
 
 def hr_mcp_toolset(tool_names: set[str]) -> AbstractToolset:
-    """The HR MCP server as a subprocess over stdio, exposing only `tool_names` to the agent."""
-    transport = StdioTransport(
-        command=sys.executable, args=["-m", "agentic_now.mcp_servers.hr_server"]
-    )
-    return MCPToolset(Client(transport)).filtered(
-        lambda _ctx, tool: tool.name in tool_names
-    )
+    """The HR MCP server, exposing only `tool_names` to the agent.
+
+    stdio: a subprocess per agent (iteration 05). http: a shared service (iteration 07).
+    """
+    if settings.hr_mcp_transport == "http":
+        toolset = MCPToolset(settings.hr_mcp_url)
+    else:
+        transport = StdioTransport(
+            command=sys.executable, args=["-m", "agentic_now.mcp_servers.hr_server"]
+        )
+        toolset = MCPToolset(Client(transport))
+    return toolset.filtered(lambda _ctx, tool: tool.name in tool_names)
 
 
 def today() -> str:
@@ -124,12 +130,13 @@ def _build(mode: Mode) -> Agent[None, HRAnswer]:
 
 
 @observe(name="hr_agent")
-def ask(question: str, mode: Mode = "semantic") -> HRAnswer:
+async def ask_async(question: str, mode: Mode = "semantic") -> HRAnswer:
+    """Async entry point: callers inside another agent's tool can't use `run_sync`."""
     get_client().update_current_span(
         metadata={"model": settings.chat_model, "mode": mode}
     )
     started = time.perf_counter()
-    result = _build(mode).run_sync(
+    result = await _build(mode).run(
         question, usage_limits=UsageLimits(request_limit=MAX_REQUESTS)
     )
     tools = [
@@ -147,6 +154,10 @@ def ask(question: str, mode: Mode = "semantic") -> HRAnswer:
         result.output.sql_used,
     )
     return result.output
+
+
+def ask(question: str, mode: Mode = "semantic") -> HRAnswer:
+    return asyncio.run(ask_async(question, mode))
 
 
 def main() -> None:

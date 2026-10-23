@@ -1,0 +1,54 @@
+# Router golden set: which specialists must be called, and (for HR) the true number.
+cases:
+  - name: books_maslow
+    question: What are the levels of Maslow's hierarchy of needs?
+    agents: [books]
+
+  - name: books_groupthink
+    question: What is groupthink?
+    agents: [books]
+
+  - name: hr_headcount
+    question: What is our headcount today?
+    agents: [hr]
+    hr_truth_sql: |
+      SELECT count(DISTINCT e.id)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type IN ('full_time', 'part_time')
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status IN ('active', 'paid_leave', 'unpaid_leave')
+
+  - name: hr_fte_engineering
+    question: What is the total FTE in the Engineering department?
+    agents: [hr]
+    hr_truth_sql: |
+      SELECT sum(e.fte_ratio)
+      FROM hr.employees e JOIN hr.departments d ON d.id = e.department_id
+      JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE d.name = 'Engineering' AND e.employment_type IN ('full_time', 'part_time')
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status IN ('active', 'paid_leave')
+
+  - name: mixed_part_time
+    question: What do the books say about motivating employees, and how many part-time employees do we have?
+    agents: [books, hr]
+    hr_truth_sql: |
+      SELECT count(DISTINCT e.id)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type = 'part_time'
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status IN ('active', 'paid_leave', 'unpaid_leave')
+
+  - name: mixed_unpaid_leave
+    question: What is Herzberg's two-factor theory, and how many employees are on unpaid leave right now?
+    agents: [books, hr]
+    hr_truth_sql: |
+      SELECT count(DISTINCT e.id)
+      FROM hr.employees e JOIN hr.employment_status_history h ON h.employee_id = e.id
+      WHERE e.employment_type IN ('full_time', 'part_time')
+        AND h.valid_from <= current_date AND (h.valid_to IS NULL OR h.valid_to > current_date)
+        AND h.status = 'unpaid_leave'
+
+  - name: out_of_scope_weather
+    question: What's the weather in Paris today?
+    agents: []

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,6 +19,15 @@ class Settings(BaseSettings):
     chat_thinking: bool = False
     embed_model: str = "nomic-embed-text"
     log_level: str = "INFO"
+
+    # Iteration 07: where the specialists run. local/stdio = in this process / subprocess.
+    books_agent_mode: Literal["local", "a2a"] = "local"
+    books_a2a_url: str = "http://localhost:8001"
+    hr_mcp_transport: Literal["stdio", "http"] = "stdio"
+    hr_mcp_url: str = "http://localhost:8002/mcp"
+
+    # Iteration 08: where the UI finds the API.
+    api_url: str = "http://localhost:8000"
 
 
 settings = Settings()

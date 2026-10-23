@@ -67,6 +67,23 @@ Business definitions live in `src/agentic_now/semantic/metrics.yaml` (who is an 
 `query_metric` and the layer compiles point-in-time SQL; raw SQL is only the fallback for questions
 no metric covers. Change a policy in the YAML, not in a prompt.
 
+## Multi-agent + A2A
+
+```bash
+uv run python -m agentic_now.agents.router "What is our headcount, and what does Herzberg say about motivation?"
+
+# Specialists as services: Books agent over A2A, HR tools over MCP Streamable HTTP
+uv run python -m agentic_now.mcp_servers.hr_server --transport http --port 8002 &
+uv run uvicorn agentic_now.a2a.books_service:app --port 8001 &
+curl -s localhost:8001/.well-known/agent-card.json
+BOOKS_AGENT_MODE=a2a HR_MCP_TRANSPORT=http uv run python -m agentic_now.agents.router "What is groupthink?"
+uv run python -m evals.router_eval --label local          # routing + HR values (evals/RESULTS_ROUTER.md)
+```
+
+A router agent delegates to two specialists (async tools) and merges their answers. The Books agent
+can run in-process or as an A2A service; the HR agent reaches its tools over MCP stdio or HTTP.
+A failed specialist is reported, not fatal.
+
 ## Observability (Langfuse)
 
 ```bash
@@ -112,5 +129,5 @@ Logs go to stderr (`LOG_LEVEL=DEBUG|INFO|WARNING`); CLI results go to stdout.
 - [x] 04 Agentic RAG — agent-driven search
 - [x] 05 HR database + MCP — text-to-SQL
 - [x] 06 Semantic layer — governed metrics (headcount, FTE)
-- [ ] 07 Multi-agent + A2A
+- [x] 07 Multi-agent + A2A
 - [ ] 08 API + UI
