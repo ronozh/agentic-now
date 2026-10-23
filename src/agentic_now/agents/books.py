@@ -137,7 +137,13 @@ def search(ctx: RunContext[BooksDeps], query: str, book: str | None = None) -> s
         query: A precise search query about one topic.
         book: Optional book title (or part of it) to restrict the search.
     """
-    return _format(ctx, retrieve(ctx.deps.conn, query, ctx.deps.k, book))
+    hits = retrieve(ctx.deps.conn, query, ctx.deps.k, book)
+    if (
+        not hits and book
+    ):  # the 4B model invents titles; an empty filter reads as "not covered"
+        logger.info("no book matches %r; searching all books", book)
+        hits = retrieve(ctx.deps.conn, query, ctx.deps.k)
+    return _format(ctx, hits)
 
 
 @agent.tool

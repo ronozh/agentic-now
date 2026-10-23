@@ -27,6 +27,8 @@ from agentic_now.rag.retrieve import Source
 logger = logging.getLogger(__name__)
 
 MAX_REQUESTS = 8
+OUT_OF_SCOPE = "I can only help with management concepts and our company's HR data."
+NOT_FOUND = "The books don't cover this."
 
 INSTRUCTIONS = """\
 You are the front door of a company assistant with two specialists:
@@ -34,7 +36,8 @@ You are the front door of a company assistant with two specialists:
 - ask_hr: numbers about OUR company's workforce (headcount, FTE, leave, part-time, hiring).
 Rules:
 - Send each part of the question to the right specialist; call both for mixed questions.
-- Give each specialist a complete, self-contained question.
+- Pass the user's own words (fix typos, resolve "it"/"they" from earlier turns). Do not add
+  phrases like "according to textbooks"; they hurt the specialist's search.
 - Do not answer from your own knowledge. If neither specialist fits, do not call a tool;
   reply: "I can only help with management concepts and our company's HR data."
 - If a tool returns ERROR, tell the user that specialist is unavailable right now.
@@ -84,10 +87,17 @@ async def ask_books(ctx: RunContext[RouterDeps], question: str) -> str:
     ctx.deps.agents_used.append("books")
     try:
         result = await _ask_books(question)
+        if (
+            not result.citations
+        ):  # the 4B Books agent sometimes gives up; one retry is cheap
+            logger.info("books found nothing; retrying once")
+            result = await _ask_books(question)
     except Exception as e:  # a specialist being down must not crash the router
         logger.exception("books specialist failed")
         ctx.deps.errors.append(f"books: {type(e).__name__}")
         return "ERROR: the books specialist is unavailable. Tell the user to try again later."
+    if not result.citations:
+        return NOT_FOUND
     ctx.deps.citations += [c for c in result.citations if c not in ctx.deps.citations]
     sources = "; ".join(c.label for c in result.citations) or "none"
     return f"{result.answer}\nSources: {sources}"
@@ -139,8 +149,12 @@ async def ask_async(
         result.usage.requests,
         deps.agents_used,
     )
+    output = result.output
+    if deps.agents_used and output.startswith(OUT_OF_SCOPE[:20]):
+        # The 4B router answers "not found" with the out-of-scope line; it was in scope.
+        output = NOT_FOUND
     answer = RouterAnswer(
-        answer=result.output,
+        answer=output,
         agents_used=sorted(set(deps.agents_used)),
         citations=deps.citations,
         hr_answers=deps.hr_answers,

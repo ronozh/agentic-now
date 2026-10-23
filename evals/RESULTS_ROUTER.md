@@ -11,3 +11,7 @@ because stdio MCP spawns a server subprocess per HR call, while HTTP reuses one 
 | 2026-10-24 07:43 | local-4b-v2 | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 39.0 |
 | 2026-10-24 08:02 | regression-iter08 | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 38.4 |
 | 2026-10-24 08:07 | review-fixes | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 36.9 |
+| 2026-10-24 09:58 | local | local | stdio | qwen3:4b-instruct | 0.86 | 1.00 | 1.00 | 0 | 45.7 |
+| 2026-10-24 10:04 | local | local | stdio | qwen3:4b-instruct | 0.86 | 1.00 | 1.00 | 0 | 44.4 |
+| 2026-10-24 10:14 | fix-books-empty | local | stdio | qwen3:4b-instruct | 0.86 | 1.00 | 1.00 | 0 | 35.5 |
+| 2026-10-24 10:20 | fix-books-empty-2 | local | stdio | qwen3:4b-instruct | 1.00 | 1.00 | 1.00 | 0 | 31.5 |
