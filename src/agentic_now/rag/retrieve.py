@@ -1,0 +1,68 @@
+"""Iteration 01 retrieval: embed the question, return the nearest chunks.
+
+Run: uv run python -m agentic_now.rag.retrieve "question" [k]
+"""
+
+import logging
+import sys
+import time
+from dataclasses import dataclass
+
+import psycopg
+
+from agentic_now import db
+from agentic_now.log import setup_logging
+from agentic_now.rag.embed import embed_query
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class Hit:
+    title: str
+    page: int
+    printed_page: int | None
+    content: str
+    distance: float  # cosine distance: 0 = identical, 1 = unrelated
+
+    @property
+    def source(self) -> str:
+        if self.printed_page:
+            return f"{self.title}, p. {self.printed_page} (PDF p. {self.page})"
+        return f"{self.title}, PDF p. {self.page}"
+
+
+def retrieve(conn: psycopg.Connection, query: str, k: int = 5) -> list[Hit]:
+    started = time.perf_counter()
+    rows = conn.execute(
+        """
+        SELECT d.title, c.page, c.printed_page, c.content, c.embedding <=> %s AS distance
+        FROM chunks c JOIN documents d ON d.id = c.document_id
+        ORDER BY distance
+        LIMIT %s
+        """,
+        (embed_query(query), k),
+    ).fetchall()
+    hits = [Hit(*row) for row in rows]
+    logger.info(
+        "retrieved %d hits in %.2fs (best distance %.3f) for %r",
+        len(hits),
+        time.perf_counter() - started,
+        hits[0].distance if hits else float("nan"),
+        query,
+    )
+    return hits
+
+
+def main() -> None:
+    setup_logging()
+    query = sys.argv[1]
+    k = int(sys.argv[2]) if len(sys.argv) > 2 else 5
+    with db.connect() as conn:
+        for rank, hit in enumerate(retrieve(conn, query, k), start=1):
+            print(f"[{rank}] {hit.distance:.3f}  {hit.source}")
+            print(f"    {hit.content[:200]}…\n")
+
+
+if __name__ == "__main__":
+    main()
